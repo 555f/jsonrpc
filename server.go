@@ -60,11 +60,35 @@ func (r *jsonRPCRequestData) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-type Server struct {
-	methods    map[string]*ServerMethod
+type Option func(*Options)
+
+func Before(before ...BeforeFunc) Option {
+	return func(o *Options) {
+		o.before = append(o.before, before...)
+	}
+}
+
+func After(after ...AfterFunc) Option {
+	return func(o *Options) {
+		o.after = append(o.after, after...)
+	}
+}
+
+type Options struct {
 	before     []BeforeFunc
 	after      []AfterFunc
 	middleware []EndpointMiddleware
+}
+
+type ServerMethod struct {
+	endpoint  Endpoint
+	reqDecode ReqDecode
+	opts      *Options
+}
+
+type Server struct {
+	methods map[string]*ServerMethod
+	opts    *Options
 }
 
 func (s *Server) makeErrorResponse(id any, code int, message string) jsonRPCResponse {
@@ -72,25 +96,33 @@ func (s *Server) makeErrorResponse(id any, code int, message string) jsonRPCResp
 }
 
 func (s *Server) handleMethod(method *ServerMethod, ctx context.Context, w http.ResponseWriter, r *http.Request, params json.RawMessage) (resp any, err error) {
-	for _, before := range method.before {
+	for _, before := range method.opts.before {
 		ctx = before(ctx, r)
 	}
 	request, err := method.reqDecode(ctx, r, params)
 	if err != nil {
 		return nil, err
 	}
-	response, err := middlewareChain(append(s.middleware, method.middleware...))(method.endpoint)(ctx, request)
+	response, err := middlewareChain(method.opts.middleware)(method.endpoint)(ctx, request)
 	if err != nil {
 		return nil, err
 	}
-	for _, after := range method.after {
+	for _, after := range method.opts.after {
 		ctx = after(ctx, w)
 	}
 	return response, nil
 }
 
-func (s *Server) Register(path string, endpoint Endpoint, reqDecode ReqDecode) *ServerMethod {
-	sm := &ServerMethod{}
+func (s *Server) Register(path string, endpoint Endpoint, reqDecode ReqDecode, opts ...Option) *ServerMethod {
+	o := &Options{
+		before:     s.opts.before,
+		after:      s.opts.after,
+		middleware: s.opts.middleware,
+	}
+	for _, opt := range opts {
+		opt(o)
+	}
+	sm := &ServerMethod{opts: o}
 	s.methods[path] = sm
 	return sm
 }
@@ -130,24 +162,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(data)
 }
 
-func NewServer() *Server {
-	return &Server{}
-}
-
-type ServerMethod struct {
-	endpoint   Endpoint
-	reqDecode  ReqDecode
-	before     []BeforeFunc
-	after      []AfterFunc
-	middleware []EndpointMiddleware
-}
-
-func (sm *ServerMethod) SetAfter(after ...AfterFunc) *ServerMethod {
-	sm.after = after
-	return sm
-}
-
-func (sm *ServerMethod) SetBefore(before ...BeforeFunc) *ServerMethod {
-	sm.before = before
-	return sm
+func NewServer(opts ...Option) *Server {
+	o := &Options{}
+	for _, opt := range opts {
+		opt(o)
+	}
+	return &Server{methods: make(map[string]*ServerMethod, 128), opts: o}
 }
