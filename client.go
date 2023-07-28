@@ -14,22 +14,31 @@ type ClientBeforeFunc func(context.Context, *http.Request) context.Context
 type ClientAfterFunc func(context.Context, *http.Response, json.RawMessage) context.Context
 
 type clientOptions struct {
-	ctx    context.Context
-	before []ClientBeforeFunc
-	after  []ClientAfterFunc
+	ctx        context.Context
+	before     []ClientBeforeFunc
+	after      []ClientAfterFunc
+	httpClient *http.Client
 }
 type ClientOption func(*clientOptions)
+
+func WithHTTPClient(httpClient *http.Client) ClientOption {
+	return func(o *clientOptions) {
+		o.httpClient = httpClient
+	}
+}
 
 func WithContext(ctx context.Context) ClientOption {
 	return func(o *clientOptions) {
 		o.ctx = ctx
 	}
 }
+
 func BeforeRequest(before ...ClientBeforeFunc) ClientOption {
 	return func(o *clientOptions) {
 		o.before = append(o.before, before...)
 	}
 }
+
 func AfterRequest(after ...ClientAfterFunc) ClientOption {
 	return func(o *clientOptions) {
 		o.after = append(o.after, after...)
@@ -85,7 +94,6 @@ func (r *BatchResult) Len() int {
 }
 
 type Client struct {
-	client      *http.Client
 	target      string
 	incrementID uint64
 	opts        *clientOptions
@@ -126,7 +134,7 @@ func (c *Client) doRequests(requests []requester) (data []byte, idsIndex map[uin
 		return nil, nil, nil, err
 	}
 	req.Body = io.NopCloser(reqBuf)
-	resp, err = c.client.Do(req)
+	resp, err = c.opts.httpClient.Do(req)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -178,9 +186,12 @@ func (c *Client) Execute(requests ...requester) (*BatchResult, error) {
 }
 
 func NewClient(target string, opts ...ClientOption) *Client {
-	c := &Client{client: http.DefaultClient, target: target, opts: &clientOptions{}}
+	c := &Client{target: target, opts: &clientOptions{}}
 	for _, opt := range opts {
 		opt(c.opts)
+	}
+	if c.opts.httpClient == nil {
+		c.opts.httpClient = http.DefaultClient
 	}
 	return c
 }
