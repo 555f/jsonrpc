@@ -122,7 +122,7 @@ func (s *Server) Register(path string, endpoint Endpoint, reqDecode ReqDecode, o
 	for _, opt := range opts {
 		opt(o)
 	}
-	sm := &ServerMethod{opts: o}
+	sm := &ServerMethod{opts: o, endpoint: endpoint, reqDecode: reqDecode}
 	s.methods[path] = sm
 	return sm
 }
