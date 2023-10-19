@@ -16,8 +16,8 @@ const jsonRPCInvalidParamsError int = -32602
 const jsonRPCInternalError int = -32603
 
 type ErrorEncoder func(ctx context.Context, err error, w http.ResponseWriter)
-type BeforeFunc func(context.Context, *http.Request) context.Context
-type AfterFunc func(context.Context, http.ResponseWriter) context.Context
+type BeforeFunc func(ctx context.Context, r *http.Request) (newCtx context.Context, err error)
+type AfterFunc func(ctx context.Context, rw http.ResponseWriter) (newCtx context.Context)
 type ReqDecode func(ctx context.Context, r *http.Request, params json.RawMessage) (result any, err error)
 type Endpoint func(ctx context.Context, request interface{}) (response interface{}, err error)
 type EndpointMiddleware = func(Endpoint) Endpoint
@@ -97,7 +97,10 @@ func (s *Server) makeErrorResponse(id any, code int, message string) jsonRPCResp
 
 func (s *Server) handleMethod(method *ServerMethod, ctx context.Context, w http.ResponseWriter, r *http.Request, params json.RawMessage) (resp any, err error) {
 	for _, before := range method.opts.before {
-		ctx = before(ctx, r)
+		ctx,err = before(ctx, r)
+		if err != nil {
+			return
+		}
 	}
 	request, err := method.reqDecode(ctx, r, params)
 	if err != nil {
