@@ -1,6 +1,6 @@
 package jsonrpc
 
-func middlewareChain(middlewares []EndpointMiddleware) EndpointMiddleware {
+func middlewareChain(middlewares []EndpointMiddlewareFunc) EndpointMiddlewareFunc {
 	return func(next Endpoint) Endpoint {
 		if len(middlewares) == 0 {
 			return next

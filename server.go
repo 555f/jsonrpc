@@ -20,7 +20,7 @@ type BeforeFunc func(ctx context.Context, r *http.Request) (newCtx context.Conte
 type AfterFunc func(ctx context.Context, rw http.ResponseWriter) (newCtx context.Context)
 type ReqDecode func(ctx context.Context, r *http.Request, params json.RawMessage) (result any, err error)
 type Endpoint func(ctx context.Context, request interface{}) (response interface{}, err error)
-type EndpointMiddleware = func(Endpoint) Endpoint
+type EndpointMiddlewareFunc = func(Endpoint) Endpoint
 
 type jsonRPCError struct {
 	Code    int    `json:"code"`
@@ -74,10 +74,16 @@ func After(after ...AfterFunc) Option {
 	}
 }
 
+func EndpointMiddleware(middleware ...EndpointMiddlewareFunc) Option {
+	return func(o *Options) {
+		o.middleware = append(o.middleware, middleware...)
+	}
+}
+
 type Options struct {
 	before     []BeforeFunc
 	after      []AfterFunc
-	middleware []EndpointMiddleware
+	middleware []EndpointMiddlewareFunc
 }
 
 type ServerMethod struct {
