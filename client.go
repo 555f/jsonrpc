@@ -177,7 +177,8 @@ func (c *Client) Execute(requests ...requester) (*BatchResult, error) {
 				code: response.Error.Code,
 				message: response.Error.Message,
 				data: response.Error.Data,
-			}		
+			}	
+			continue	
 		}
 		for _, afterFunc := range c.opts.after {
 			afterFunc(resp.Request.Context(), resp, response.Result)
