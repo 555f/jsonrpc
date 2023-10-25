@@ -86,7 +86,7 @@ type BatchResult struct {
 	results []any
 }
 
-func (r *BatchResult) Error(i int) (err *Error) {
+func (r *BatchResult) Error(i int) (err error) {
 	err, _ = r.results[i].(*Error)
 	return
 }
