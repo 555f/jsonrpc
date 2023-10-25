@@ -87,8 +87,11 @@ type BatchResult struct {
 }
 
 func (r *BatchResult) Error(i int) (err error) {
-	err, _ = r.results[i].(*Error)
-	return
+	err, ok := r.results[i].(*Error)
+	if ok {
+		return err
+	}
+	return nil
 }
 
 func (r *BatchResult) At(i int) any {
