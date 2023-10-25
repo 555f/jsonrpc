@@ -86,6 +86,11 @@ type BatchResult struct {
 	results []any
 }
 
+func (r *BatchResult) Error(i int) (e *Error, ok bool) {
+	e, ok = r.results[i].(*Error)
+	return
+}
+
 func (r *BatchResult) At(i int) any {
 	return r.results[i]
 }
@@ -166,10 +171,17 @@ func (c *Client) Execute(requests ...requester) (*BatchResult, error) {
 	}
 	batchResult := &BatchResult{results: make([]any, len(requests))}
 	for _, response := range responses {
+		i := idsIndex[response.ID]
+		if response.Error != nil {
+			batchResult.results[i] = &Error{
+				code: response.Error.Code,
+				message: response.Error.Message,
+				data: response.Error.Data,
+			}		
+		}
 		for _, afterFunc := range c.opts.after {
 			afterFunc(resp.Request.Context(), resp, response.Result)
 		}
-		i := idsIndex[response.ID]
 		request := requests[i]
 		if v, ok := request.(requesterWithAfter); ok {
 			for _, afterFunc := range v.After() {
