@@ -45,16 +45,16 @@ func AfterRequest(after ...ClientAfterFunc) ClientOption {
 	}
 }
 
-type requester interface {
+type Requester interface {
 	MakeRequest() (string, any)
 	MakeResult(data []byte) (any, error)
 }
 
-type requesterWithBefore interface {
+type RequesterWithBefore interface {
 	Before() []ClientBeforeFunc
 }
 
-type requesterWithAfter interface {
+type RequesterWithAfter interface {
 	After() []ClientAfterFunc
 }
 
@@ -111,12 +111,15 @@ func (c *Client) autoIncrementID() uint64 {
 	return atomic.AddUint64(&c.incrementID, 1)
 }
 
-func (c *Client) doRequests(requests []requester) (data []byte, idsIndex map[uint64]int, resp *http.Response, err error) {
+func (c *Client) doRequests(ctx context.Context, requests []Requester) (data []byte, idsIndex map[uint64]int, resp *http.Response, err error) {
 	c.incrementID = 0
 	req, err := http.NewRequest("POST", c.target, nil)
 	if err != nil {
 		return nil, nil, nil, err
 	}
+
+	req = req.WithContext(ctx)
+
 	idsIndex = make(map[uint64]int, len(requests))
 	rpcRequests := make([]clientReq, len(requests))
 	for _, beforeFunc := range c.opts.before {
@@ -126,7 +129,7 @@ func (c *Client) doRequests(requests []requester) (data []byte, idsIndex map[uin
 		if v, ok := request.(requesterWithContext); ok && v.Context() != nil {
 			req = req.WithContext(v.Context())
 		}
-		if r, ok := request.(requesterWithBefore); ok {
+		if r, ok := request.(RequesterWithBefore); ok {
 			for _, beforeFunc := range r.Before() {
 				req = req.WithContext(beforeFunc(req.Context(), req))
 			}
@@ -159,12 +162,20 @@ func (c *Client) doRequests(requests []requester) (data []byte, idsIndex map[uin
 	return
 }
 
-func (c *Client) RawExecute(requests ...requester) ([]byte, map[uint64]int, *http.Response, error) {
-	return c.doRequests(requests)
+func (c *Client) RawExecute(requests ...Requester) ([]byte, map[uint64]int, *http.Response, error) {
+	return c.RawExecuteWithContext(context.TODO(), requests...)
 }
 
-func (c *Client) Execute(requests ...requester) (*BatchResult, error) {
-	data, idsIndex, resp, err := c.doRequests(requests)
+func (c *Client) RawExecuteWithContext(ctx context.Context, requests ...Requester) ([]byte, map[uint64]int, *http.Response, error) {
+	return c.doRequests(ctx, requests)
+}
+
+func (c *Client) Execute(requests ...Requester) (*BatchResult, error) {
+	return c.ExecuteWithContext(context.TODO(), requests...)
+}
+
+func (c *Client) ExecuteWithContext(ctx context.Context, requests ...Requester) (*BatchResult, error) {
+	data, idsIndex, resp, err := c.doRequests(ctx, requests)
 	if err != nil {
 		return nil, err
 	}
@@ -177,17 +188,17 @@ func (c *Client) Execute(requests ...requester) (*BatchResult, error) {
 		i := idsIndex[response.ID]
 		if response.Error != nil {
 			batchResult.results[i] = &Error{
-				code: response.Error.Code,
+				code:    response.Error.Code,
 				message: response.Error.Message,
-				data: response.Error.Data,
-			}	
-			continue	
+				data:    response.Error.Data,
+			}
+			continue
 		}
 		for _, afterFunc := range c.opts.after {
 			afterFunc(resp.Request.Context(), resp, response.Result)
 		}
 		request := requests[i]
-		if v, ok := request.(requesterWithAfter); ok {
+		if v, ok := request.(RequesterWithAfter); ok {
 			for _, afterFunc := range v.After() {
 				afterFunc(resp.Request.Context(), resp, response.Result)
 			}

@@ -103,7 +103,7 @@ func (s *Server) makeErrorResponse(id any, code int, message string) jsonRPCResp
 
 func (s *Server) handleMethod(method *ServerMethod, ctx context.Context, w http.ResponseWriter, r *http.Request, params json.RawMessage) (resp any, err error) {
 	for _, before := range method.opts.before {
-		ctx,err = before(ctx, r)
+		ctx, err = before(ctx, r)
 		if err != nil {
 			return
 		}
@@ -122,7 +122,7 @@ func (s *Server) handleMethod(method *ServerMethod, ctx context.Context, w http.
 	return response, nil
 }
 
-func (s *Server) Register(path string, endpoint Endpoint, reqDecode ReqDecode, opts ...Option) *ServerMethod {
+func (s *Server) Register(method string, endpoint Endpoint, reqDecode ReqDecode, opts ...Option) *ServerMethod {
 	o := &Options{
 		before:     s.opts.before,
 		after:      s.opts.after,
@@ -132,7 +132,7 @@ func (s *Server) Register(path string, endpoint Endpoint, reqDecode ReqDecode, o
 		opt(o)
 	}
 	sm := &ServerMethod{opts: o, endpoint: endpoint, reqDecode: reqDecode}
-	s.methods[path] = sm
+	s.methods[method] = sm
 	return sm
 }
 
